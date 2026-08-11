@@ -20,12 +20,27 @@ RUN go mod download
 # Código y compilación estática (sin CGO → binario portable).
 COPY backend/ .
 ENV CGO_ENABLED=0
-RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
+ && go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate \
+ && go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
 
 # Imagen final mínima y sin root (incluye certificados CA para TLS saliente).
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/api /app/api
+
+# `migrate` y `seed` viajan en la misma imagen.
+#
+# Sin esto, aplicar las migraciones exige levantar un contenedor aparte con el
+# código y las dependencias, que es justo el paso que falla en el peor momento —
+# y las migraciones hay que aplicarlas SIEMPRE antes de que arranque la API, o
+# esta se estrella contra tablas que no existen.
+#
+# Ocupan poco: son dos binarios estáticos que comparten toda la compilación.
+# Los ficheros SQL no hacen falta: `migrate` los lleva incrustados (go:embed).
+COPY --from=build /out/migrate /app/migrate
+COPY --from=build /out/seed    /app/seed
+
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/api"]

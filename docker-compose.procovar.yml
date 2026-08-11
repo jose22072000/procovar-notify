@@ -1,0 +1,86 @@
+# Procovar Notify en el VPS de Procovar.
+#
+# Tres piezas y ninguna base de datos propia: el Postgres y el Redis ya existen
+# y se comparten, que es la regla de la casa — un motor, muchas bases.
+#
+#   api     recibe las peticiones de las aplicaciones y encola el envío
+#   worker  saca de la cola, dibuja la plantilla y manda el correo
+#   web     la pantalla para ver y editar las plantillas
+#
+# Las variables van en Dokploy, no aquí: este fichero se lee en un repositorio
+# público y las claves no viven en un repositorio.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    environment:
+      APP_ENV: production
+      API_PORT: "8080"
+      DATABASE_URL: ${DATABASE_URL}
+      # Redis por centinela: es lo que espera el servicio y lo que ya usa auth.
+      REDIS_SENTINELS: ${REDIS_SENTINELS}
+      REDIS_MASTER_NAME: ${REDIS_MASTER_NAME}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_PASSWORD}
+      # Prefijo y bases PROPIAS. auth usa el prefijo `auth` y las bases 4 a 7;
+      # si estas coincidieran, un borrado de una aplicación se llevaría por
+      # delante las llaves de la otra sin que nada avisara.
+      REDIS_PREFIX: notify
+      REDIS_DB_DEFAULT: "8"
+      REDIS_DB_LOCKS: "9"
+      REDIS_DB_ASYNQ: "10"
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY}
+      SECRET_ENCRYPTION_KEY_VERSION: "1"
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      HMAC_TIMESTAMP_SKEW_SECONDS: "300"
+      CORS_ALLOWED_ORIGINS: https://avisos.procovar.cloud
+      # Las aplicaciones de Procovar se llaman entre ellas por la red interna de
+      # Docker, con nombres que no son públicos. Sin esto, el guardia
+      # anti-SSRF las trataría como destinos privados y bloquearía los avisos.
+      WEBHOOK_ALLOW_PRIVATE: "true"
+      TRUST_PROXY_HEADERS: "true"
+    networks: [dokploy-network]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.services
+    environment:
+      APP_ENV: production
+      WORKER_CONCURRENCY: "10"
+      METRICS_PORT: "9091"
+      QUEUE_RETRY_MAX: "3"
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_SENTINELS: ${REDIS_SENTINELS}
+      REDIS_MASTER_NAME: ${REDIS_MASTER_NAME}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PREFIX: notify
+      REDIS_DB_DEFAULT: "8"
+      REDIS_DB_LOCKS: "9"
+      REDIS_DB_ASYNQ: "10"
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY}
+      SECRET_ENCRYPTION_KEY_VERSION: "1"
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      WEBHOOK_ALLOW_PRIVATE: "true"
+    networks: [dokploy-network]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        # Se cuece al construir, no al arrancar: el navegador recibe un paquete
+        # ya compilado y ahí no hay variables de entorno que valgan.
+        VITE_API_URL: https://avisos-api.procovar.cloud
+    environment:
+      WEB_PORT: "80"
+    networks: [dokploy-network]
+    restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true
