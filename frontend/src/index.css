@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 @import "tw-animate-css";
 
 /* Tema oscuro por clase: activo cuando un ancestro (<html>) tiene .dark */
@@ -30,60 +31,73 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Las tres letras de Procovar: Archivo titula, Plex Sans lee, Plex Mono es
+     para los codigos —una clave de API, un identificador—, que se comparan
+     caracter a caracter. */
+  --font-display: Archivo, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 :root {
   color-scheme: light;
   --radius: 0;
-  --background: #ffffff;
-  --foreground: #0a0a0a;
+  --background: #f1f4f3;
+  --foreground: #0f1518;
   --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card-foreground: #0f1518;
   --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
-  --primary: #059669; /* emerald-600: marca */
+  --popover-foreground: #0f1518;
+  --primary: #054c74; /* el azul del isotipo de Procovar */
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
-  --destructive: #ef4444;
+  --secondary: #e7eff4;
+  --secondary-foreground: #04324c;
+  --muted: #eef1f2;
+  --muted-foreground: #55646c;
+  --accent: #e7eff4;
+  --accent-foreground: #04324c;
+  --destructive: #a81f26;
   --destructive-foreground: #ffffff;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
-  --ring: #059669;
-  --body-bg: #f4f5f7;
+  --border: #cbd6db;
+  --input: #cbd6db;
+  --ring: #054c74;
+  --body-bg: #f1f4f3;
 }
 
 .dark {
   color-scheme: dark;
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
-  --primary: #10b981; /* emerald-500: un punto más brillante en oscuro */
-  --primary-foreground: #052e16;
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --border: #27272a;
-  --input: #27272a;
-  --ring: #10b981;
-  --body-bg: #09090b;
+  --background: #0b1418;
+  --foreground: #e6edf0;
+  --card: #111d23;
+  --card-foreground: #e6edf0;
+  --popover: #111d23;
+  --popover-foreground: #e6edf0;
+  --primary: #4e9ec9; /* en oscuro el azul de marca no llega a contraste: se aclara */
+  --primary-foreground: #04222f;
+  --secondary: #16262e;
+  --secondary-foreground: #d6e6ee;
+  --muted: #16262e;
+  --muted-foreground: #94a6af;
+  --accent: #16262e;
+  --accent-foreground: #d6e6ee;
+  --destructive: #e4808a;
+  --destructive-foreground: #2a1418;
+  --border: #26383f;
+  --input: #26383f;
+  --ring: #4e9ec9;
+  --body-bg: #0b1418;
 }
 
 body {
   background: var(--body-bg);
   color: var(--foreground);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: Archivo, system-ui, sans-serif;
+  letter-spacing: -0.015em;
 }
 
 /* Diseño sin esquinas redondeadas: cuadra cualquier utilidad rounded* (incluidas
