@@ -1,0 +1,155 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Tema oscuro por clase: activo cuando un ancestro (<html>) tiene .dark */
+@custom-variant dark (&:is(.dark *));
+
+/* Mapeo de los tokens shadcn a utilidades de Tailwind v4 (bg-primary, text-muted-foreground, border-input, ring-ring, …). */
+@theme inline {
+  /* Diseño sin esquinas redondeadas: todo cuadrado. */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  color-scheme: light;
+  --radius: 0;
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #059669; /* emerald-600: marca */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #059669;
+  --body-bg: #f4f5f7;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #10b981; /* emerald-500: un punto más brillante en oscuro */
+  --primary-foreground: #052e16;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #10b981;
+  --body-bg: #09090b;
+}
+
+body {
+  background: var(--body-bg);
+  color: var(--foreground);
+}
+
+/* Diseño sin esquinas redondeadas: cuadra cualquier utilidad rounded* (incluidas
+   rounded y rounded-full, que no se basan en los tokens). Va sin @layer, así que
+   gana a las utilidades de Tailwind. */
+[class*="rounded"] {
+  border-radius: 0 !important;
+}
+
+/* Tablas: en móvil (< md) cada fila se muestra como tarjeta con los datos
+   apilados (etiqueta arriba, valor debajo) — mejor para valores largos. El corte
+   es 768px (md) para alinear con los tabs que conmutan card↔tabla manualmente
+   (Templates, Webhooks…); así no hay franja 640–767 con criterios distintos. */
+@media (max-width: 767.98px) {
+  .responsive-table thead {
+    display: none;
+  }
+  .responsive-table tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 1rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+  }
+  .responsive-table td {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    padding: 0.4rem 0 !important;
+    border: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  /* Celda que ocupa media fila (para poner dos datos cortos en horizontal). */
+  .responsive-table td.rt-half {
+    width: calc(50% - 0.5rem);
+  }
+  /* Celda de acción: arriba a la derecha de la tarjeta, en línea con el primer dato. */
+  .responsive-table td.rt-action {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    width: auto;
+    padding: 0 !important;
+  }
+  /* Primer dato (junto a la acción): reserva hueco a la derecha para no quedar debajo. */
+  .responsive-table td.rt-pad-action {
+    padding: 0.4rem 2.75rem 0.4rem 0 !important;
+  }
+  .responsive-table td::before {
+    content: attr(data-label);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .responsive-table td[data-label=""]::before {
+    content: "";
+  }
+  .responsive-table td:empty {
+    display: none;
+  }
+}

@@ -1,0 +1,32 @@
+# Configuración de golangci-lint para QB Notify v2.
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck      # errores no comprobados
+    - govet         # análisis estándar de go vet
+    - ineffassign   # asignaciones sin uso
+    - staticcheck   # análisis estático amplio
+    - unused        # código muerto
+    - gofmt         # formato
+    - goimports     # orden de imports
+    - bodyclose     # http.Response.Body sin cerrar
+    - revive        # estilo idiomático
+    # misspell NO se activa: el código y los comentarios están en español (regla del
+    # proyecto) y misspell solo soporta inglés → produciría solo falsos positivos.
+
+linters-settings:
+  revive:
+    rules:
+      # min/max son builtins desde Go 1.21, pero usarlos como nombres es válido y
+      # común aquí (variables/campos); no lo tratamos como error.
+      - name: redefines-builtin-id
+        disabled: true
+
+issues:
+  exclude-rules:
+    # Los tests pueden ser más laxos con errores no comprobados.
+    - path: _test\.go
+      linters:
+        - errcheck

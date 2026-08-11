@@ -1,0 +1,26 @@
+# nginx para la SPA del v2: sirve los estáticos y hace fallback a index.html
+# (react-router). El api es público y el bundle lo llama directo (VITE_API_URL
+# horneado en build-time) — nginx no hace de proxy hacia él.
+#
+# Variable (con default en el Dockerfile, igual que API_PORT en el api):
+#   WEB_PORT → puerto en el que escucha nginx (default 50001)
+server {
+    listen ${WEB_PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # Assets con hash → cache larga.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA: cualquier ruta desconocida → index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

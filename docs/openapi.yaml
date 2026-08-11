@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: QB Notify API
+  version: "1.0"
+  description: >
+    API del microservicio de notificaciones QB Notify v2.
+    La API pública (/v1) se autentica por firma HMAC (cabeceras X-QBN-*).
+    La API de administración (/admin) usa JWT de sesión.
+    Documento mantenido de forma incremental; el contrato se verifica en CI (Fase 9).
+
+servers:
+  - url: http://localhost:8080
+
+components:
+  securitySchemes:
+    hmac:
+      type: apiKey
+      in: header
+      name: X-QBN-Signature
+      description: >
+        Firma HMAC-SHA256. Requiere además X-QBN-Key-Id y X-QBN-Timestamp.
+        StringToSign = METHOD \n PATH \n SHA256(body) \n timestamp.
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Problem:
+      type: object
+      description: Error RFC 7807.
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        traceId: { type: string }
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        templateKey: { type: string }
+        notificationType: { type: string }
+        channel: { type: string, enum: [EMAIL, PUSH, SMS, IN_APP] }
+        status: { type: string, enum: [PENDING, QUEUED, PROCESSING, SENT, DELIVERED, READ, FAILED, CANCELLED] }
+        recipientUserId: { type: string, nullable: true }
+        recipient: { type: object }
+        payload: { type: object }
+        priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        readAt: { type: string, format: date-time, nullable: true }
+    Attachment:
+      type: object
+      description: Adjunto inline (base64) o por URL (http/https). Máx 10 MiB por adjunto, 20 por notificación.
+      properties:
+        filename: { type: string }
+        contentType: { type: string }
+        url: { type: string, description: URL http/https del adjunto }
+        contentBase64: { type: string, description: Contenido del adjunto en base64 }
+    CreateNotificationRequest:
+      type: object
+      required: [templateKey, notificationType]
+      properties:
+        templateKey: { type: string }
+        notificationType: { type: string }
+        channel: { type: string }
+        recipient: { type: object }
+        recipientUserId: { type: string }
+        payload: { type: object }
+        priority: { type: string }
+        locale: { type: string }
+        idempotencyKey: { type: string }
+        scheduledAt: { type: string, format: date-time, nullable: true }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+    Preferences:
+      type: object
+      properties:
+        email: { type: boolean }
+        push: { type: boolean }
+        sms: { type: boolean }
+        inApp: { type: boolean }
+
+security:
+  - hmac: []
+
+paths:
+  /v1/notifications:
+    post:
+      summary: Crear y encolar una notificación
+      security: [{ hmac: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNotificationRequest' }
+      responses:
+        "202": { description: Aceptada y encolada }
+        "401": { description: Firma inválida, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        "422": { description: Validación fallida }
+    get:
+      summary: Listar notificaciones (cursor + filtros)
+      security: [{ hmac: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: channel, in: query, schema: { type: string } }
+        - { name: recipientUserId, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string, format: date-time } }
+        - { name: endDate, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        "200":
+          description: Página de notificaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+                  nextCursor: { type: string }
+
+  /v1/notifications/batch:
+    post:
+      summary: Envío masivo (hasta 1000 destinatarios, éxito parcial)
+      security: [{ hmac: [] }]
+      responses:
+        "200":
+          description: Resultado con created[] y failed[]
+        "422": { description: Batch vacío o demasiado grande }
+
+  /v1/notifications/{id}:
+    get:
+      summary: Obtener una notificación
+      security: [{ hmac: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Notificación, content: { application/json: { schema: { $ref: '#/components/schemas/Notification' } } } }
+        "404": { description: No encontrada }
+
+  /v1/notifications/{id}/cancel:
+    post:
+      summary: Cancelar una notificación no enviada
+      security: [{ hmac: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Cancelada }
+        "409": { description: Ya no es cancelable }
+
+  /v1/notifications/{id}/read:
+    post:
+      summary: Marcar como leída
+      security: [{ hmac: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Marcada como leída }
+
+  /v1/inbox:
+    get:
+      summary: Bandeja in-app de un usuario
+      security: [{ hmac: [] }]
+      parameters:
+        - { name: userId, in: query, required: true, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Notificaciones in-app del usuario }
+
+  /v1/users/{userId}/preferences:
+    get:
+      summary: Preferencias de notificación del usuario
+      security: [{ hmac: [] }]
+      parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Preferencias, content: { application/json: { schema: { $ref: '#/components/schemas/Preferences' } } } }
+    put:
+      summary: Actualizar preferencias (opt-out por canal)
+      security: [{ hmac: [] }]
+      parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Preferences' }
+      responses:
+        "200": { description: Preferencias actualizadas }
+
+  /admin/auth/login:
+    post:
+      summary: Login de administración
+      security: []
+      responses:
+        "200": { description: accessToken + refreshToken }
+        "401": { description: Credenciales inválidas }
+
+  /admin/auth/refresh:
+    post:
+      summary: Renovar tokens
+      security: []
+      responses:
+        "200": { description: Nuevos tokens }
+
+  /admin/me:
+    get:
+      summary: Identidad del admin autenticado
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: Identidad }
+
+  /healthz:
+    get:
+      summary: Liveness
+      security: []
+      responses: { "200": { description: OK } }
+  /readyz:
+    get:
+      summary: Readiness (DB + Redis)
+      security: []
+      responses:
+        "200": { description: Listo }
+        "503": { description: Degradado }

@@ -1,0 +1,94 @@
+# Entorno de desarrollo local de QB Notify v2.
+#
+# Provee SOLO la infraestructura (Postgres, Redis en modo Sentinel y MailHog).
+# Los binarios `api` y `worker` se ejecutan en el host con `make run-api` /
+# `make run-worker`, apuntando a esta infra vía .env.
+#
+# Sobre Redis Sentinel y `network_mode: host`:
+#   Sentinel descubre el master y reporta su dirección a los clientes. En una red
+#   bridge de Docker anunciaría IPs internas (172.x) inalcanzables desde el host,
+#   y el cliente de failover fallaría. Con `network_mode: host` (Linux) todo vive
+#   en 127.0.0.1 con puertos distintos, así que lo anunciado es alcanzable desde
+#   el host. En macOS/Windows usa el modo nodo único (REDIS_ADDR) de .env.example.
+#
+# Puertos (host): Postgres 55432 · Redis master 6379 · réplica 6380 ·
+#                 sentinels 26379/26380/26381 · MailHog SMTP 1025 / UI 8025.
+
+x-sentinel: &sentinel
+  image: redis:7-alpine
+  network_mode: host
+  depends_on:
+    - redis-master
+  restart: unless-stopped
+
+services:
+  # Escucha en 55432 (no en el 5432 por defecto) para no chocar con un Postgres
+  # del sistema que suela ocupar el 5432 en la máquina del desarrollador.
+  postgres:
+    image: postgres:16-alpine
+    network_mode: host
+    command: ["-p", "55432"]
+    environment:
+      POSTGRES_USER: qbnotify
+      POSTGRES_PASSWORD: qbnotify
+      POSTGRES_DB: qbnotify
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qbnotify -p 55432"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis-master:
+    image: redis:7-alpine
+    network_mode: host
+    command: redis-server --port 6379 --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis-replica:
+    image: redis:7-alpine
+    network_mode: host
+    command: >
+      redis-server --port 6380 --save "" --appendonly no
+      --replicaof 127.0.0.1 6379
+      --replica-announce-ip 127.0.0.1 --replica-announce-port 6380
+    depends_on:
+      - redis-master
+    restart: unless-stopped
+
+  # Cada Sentinel copia la config compartida a /tmp (Sentinel reescribe su
+  # fichero en runtime, por eso no se monta de solo lectura directamente) y
+  # arranca en su propio puerto.
+  redis-sentinel-1:
+    <<: *sentinel
+    volumes:
+      - ./redis-sentinel/sentinel.conf:/etc/sentinel.conf:ro
+    command: sh -c "cp /etc/sentinel.conf /tmp/s.conf && exec redis-sentinel /tmp/s.conf --port 26379"
+
+  redis-sentinel-2:
+    <<: *sentinel
+    volumes:
+      - ./redis-sentinel/sentinel.conf:/etc/sentinel.conf:ro
+    command: sh -c "cp /etc/sentinel.conf /tmp/s.conf && exec redis-sentinel /tmp/s.conf --port 26380"
+
+  redis-sentinel-3:
+    <<: *sentinel
+    volumes:
+      - ./redis-sentinel/sentinel.conf:/etc/sentinel.conf:ro
+    command: sh -c "cp /etc/sentinel.conf /tmp/s.conf && exec redis-sentinel /tmp/s.conf --port 26381"
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    network_mode: host
+    # SMTP en :1025, interfaz web en http://localhost:8025
+    restart: unless-stopped
+
+volumes:
+  pgdata:

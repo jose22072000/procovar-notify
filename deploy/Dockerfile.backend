@@ -1,0 +1,31 @@
+# API del v2 (Go), imagen "backend". Multi-stage: compila un binario estático y
+# lo mete en una imagen mínima (distroless). El código Go vive en backend/;
+# construir desde la RAÍZ del repo (el contexto necesita backend/):
+#   docker build -f deploy/Dockerfile.backend -t notify-backend .
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+
+# git: necesario si algún módulo se resuelve por VCS directo (GOPROXY=...,direct).
+RUN apk add --no-cache git
+
+# GOPROXY configurable (por defecto el oficial). Si tu red bloquea proxy.golang.org
+# puedes usar un mirror: --build-arg GOPROXY=https://goproxy.io,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
+# Cache de dependencias.
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+# Código y compilación estática (sin CGO → binario portable).
+COPY backend/ .
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+
+# Imagen final mínima y sin root (incluye certificados CA para TLS saliente).
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=build /out/api /app/api
+EXPOSE 8080
+USER nonroot:nonroot
+ENTRYPOINT ["/app/api"]

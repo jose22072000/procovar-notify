@@ -1,0 +1,46 @@
+name: Build And Push FRONTEND
+on:
+  push:
+    branches: [main]
+
+# frontend: SPA de administración (React/Vite + nginx). Imagen desde
+# deploy/Dockerfile.frontend, contexto de build = raíz del repo. VITE_API_URL
+# se hornea en el bundle en build-time (no es una env var de runtime) — viene
+# de la variable de repo/entorno VITE_API_URL (Settings → Secrets and
+# variables → Actions → Variables), no de un secret.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Version
+        id: version
+        run: |
+          commit_count=$(git rev-list --count HEAD)
+          echo "VERSION=1.0.${commit_count}" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Login to my Registry
+        uses: docker/login-action@v3
+        with:
+          registry: https://docker.divergtech.com
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build And Push frontend
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          context: .
+          file: ./deploy/Dockerfile.frontend
+          build-args: VITE_API_URL=${{ vars.VITE_API_URL }}
+          platforms: linux/amd64
+          provenance: false
+          tags: |
+            docker.divergtech.com/notify-frontend:v${{ steps.version.outputs.VERSION }}

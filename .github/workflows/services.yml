@@ -1,0 +1,43 @@
+name: Build And Push SERVICES
+on:
+  push:
+    branches: [main]
+
+# services: worker asynq (consume la cola, envía notificaciones, recurrencias,
+# retención PII). Imagen desde deploy/Dockerfile.services, contexto de build =
+# raíz del repo.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Version
+        id: version
+        run: |
+          commit_count=$(git rev-list --count HEAD)
+          echo "VERSION=1.0.${commit_count}" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Login to my Registry
+        uses: docker/login-action@v3
+        with:
+          registry: https://docker.divergtech.com
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build And Push services
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          context: .
+          file: ./deploy/Dockerfile.services
+          platforms: linux/amd64
+          provenance: false
+          tags: |
+            docker.divergtech.com/notify-services:v${{ steps.version.outputs.VERSION }}

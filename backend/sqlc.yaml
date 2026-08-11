@@ -1,0 +1,23 @@
+version: "2"
+sql:
+  - engine: postgresql
+    # sqlc lee el esquema de las migraciones goose (entiende las anotaciones
+    # "-- +goose Up/Down" y solo aplica la sección Up).
+    schema: db/migrations
+    queries: db/queries
+    gen:
+      go:
+        package: sqlc
+        out: internal/store/sqlc
+        sql_package: pgx/v5
+        emit_interface: true                 # genera Querier (interfaz) para mockear
+        emit_json_tags: true
+        emit_pointers_for_null_types: true   # columnas NULL → punteros, no sql.NullX
+        query_parameter_limit: 1             # >1 parámetro → struct de params (legible)
+        overrides:
+          # Un solo override por tipo; las columnas NULL se vuelven punteros
+          # automáticamente por emit_pointers_for_null_types.
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: jsonb
+            go_type: encoding/json.RawMessage

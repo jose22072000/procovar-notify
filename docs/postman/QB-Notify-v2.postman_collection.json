@@ -1,0 +1,601 @@
+{
+  "info": {
+    "_postman_id": "8f3a9c1e-4b6d-4f2a-9e7b-1c5d2e8a7f30",
+    "name": "QB Notify v2 — API pública (/v1)",
+    "description": "API pública multi-tenant de **QB Notify v2** (el servicio Go), autenticada por HMAC-SHA256. El prefijo `/v1` de las rutas es el versionado de la propia API, no la versión del proyecto.\n\nEl pre-request script de la colección calcula la firma automáticamente y añade las cabeceras `X-QBN-Key-Id`, `X-QBN-Timestamp` y `X-QBN-Signature` a cada petición.\n\n**Configura en el environment:** `baseUrl`, `keyId`, `apiSecret` (con `make seed`: `demo-key` / valor de `SEED_API_KEY_SECRET`).\n\nGuía completa: `docs/API-INTEGRACION.md` del repositorio.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Firma HMAC de QB Notify: METHOD \\n PATH \\n QUERY_CANONICA \\n SHA256_HEX(BODY) \\n TIMESTAMP",
+          "const keyId = pm.variables.get('keyId');",
+          "const secret = pm.variables.get('apiSecret');",
+          "if (!keyId || !secret) {",
+          "    throw new Error('Configura keyId y apiSecret en el environment (ver docs/API-INTEGRACION.md)');",
+          "}",
+          "",
+          "// Codificación equivalente a url.QueryEscape de Go (espacio -> '+').",
+          "function goQueryEscape(s) {",
+          "    return encodeURIComponent(s)",
+          "        .replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); })",
+          "        .replace(/%20/g, '+');",
+          "}",
+          "",
+          "// Path resuelto (sin query) a partir de la URL completa.",
+          "const resolvedUrl = pm.variables.replaceIn(pm.request.url.toString());",
+          "const m = resolvedUrl.match(/^[a-z][a-z0-9+.-]*:\\/\\/[^\\/?#]+([^?#]*)/i);",
+          "let path = (m && m[1]) || '/';",
+          "path = path.split('?')[0];",
+          "if (path === '') { path = '/'; }",
+          "",
+          "// Query canónica: claves ordenadas alfabéticamente, codificación Go.",
+          "const params = pm.request.url.query.all()",
+          "    .filter(function (q) { return !q.disabled && q.key; })",
+          "    .map(function (q) {",
+          "        return {",
+          "            key: pm.variables.replaceIn(q.key),",
+          "            value: pm.variables.replaceIn(q.value || '')",
+          "        };",
+          "    });",
+          "params.sort(function (a, b) { return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0); });",
+          "const query = params.map(function (q) { return goQueryEscape(q.key) + '=' + goQueryEscape(q.value); }).join('&');",
+          "",
+          "// Body crudo con variables resueltas; se reescribe para que lo firmado == lo enviado.",
+          "let body = '';",
+          "if (pm.request.body && pm.request.body.mode === 'raw' && pm.request.body.raw) {",
+          "    body = pm.variables.replaceIn(pm.request.body.raw);",
+          "    pm.request.body.update({ mode: 'raw', raw: body });",
+          "}",
+          "",
+          "const CryptoJS = require('crypto-js');",
+          "const timestamp = Math.floor(Date.now() / 1000).toString();",
+          "const bodyHash = CryptoJS.SHA256(body).toString(CryptoJS.enc.Hex);",
+          "const stringToSign = [pm.request.method.toUpperCase(), path, query, bodyHash, timestamp].join('\\n');",
+          "const signature = CryptoJS.HmacSHA256(stringToSign, String(secret)).toString(CryptoJS.enc.Hex);",
+          "",
+          "pm.request.headers.upsert({ key: 'X-QBN-Key-Id', value: keyId });",
+          "pm.request.headers.upsert({ key: 'X-QBN-Timestamp', value: timestamp });",
+          "pm.request.headers.upsert({ key: 'X-QBN-Signature', value: signature });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "userId",
+      "value": "user-123"
+    },
+    {
+      "key": "notificationType",
+      "value": "bienvenida"
+    },
+    {
+      "key": "notificationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Identidad",
+      "item": [
+        {
+          "name": "whoami",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK — firma válida', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/whoami",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "whoami"
+              ]
+            },
+            "description": "Identidad del tenant autenticado. Úsalo como smoke test de la firma HMAC: si responde 200, keyId/apiSecret están bien configurados."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones",
+      "item": [
+        {
+          "name": "Crear (por tipo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "const json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('notificationId', json.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{notificationType}}\",\n  \"recipient\": {\n    \"email\": \"destinatario@ejemplo.com\",\n    \"name\": \"Ana Pérez\"\n  },\n  \"recipientUserId\": \"{{userId}}\",\n  \"payload\": {\n    \"nombre\": \"Ana\"\n  },\n  \"priority\": \"NORMAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Crea y encola una notificación identificada por el Tipo de notificación (`type` = nombre o UUID, configurado en la SPA), que deriva canal, plantilla y destino. Scope: notifications:send. Guarda el `id` devuelto en {{notificationId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear (modo legado templateKey)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "const json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('notificationId', json.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateKey\": \"welcome\",\n  \"notificationType\": \"bienvenida\",\n  \"channel\": \"EMAIL\",\n  \"recipient\": {\n    \"email\": \"destinatario@ejemplo.com\"\n  },\n  \"payload\": {\n    \"nombre\": \"Ana\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Modo legado: plantilla (`templateKey`), tipo y canal explícitos, sin pasar por un Tipo de notificación configurado. Scope: notifications:send."
+          },
+          "response": []
+        },
+        {
+          "name": "Crear programada (scheduledAt)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "const json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('notificationId', json.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{notificationType}}\",\n  \"recipient\": {\n    \"email\": \"destinatario@ejemplo.com\"\n  },\n  \"payload\": {\n    \"nombre\": \"Ana\"\n  },\n  \"scheduledAt\": \"2026-12-31T09:00:00Z\",\n  \"idempotencyKey\": \"demo-programada-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Envío diferido: `scheduledAt` en RFC3339. Se puede cancelar antes de la hora programada con el endpoint Cancelar. Scope: notifications:send."
+          },
+          "response": []
+        },
+        {
+          "name": "Batch (envío masivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "if (json && json.created && json.created.length) { pm.collectionVariables.set('notificationId', json.created[0]); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateKey\": \"welcome\",\n  \"notificationType\": \"bienvenida\",\n  \"channel\": \"EMAIL\",\n  \"priority\": \"NORMAL\",\n  \"items\": [\n    {\n      \"recipient\": { \"email\": \"a@ejemplo.com\" },\n      \"payload\": { \"nombre\": \"A\" }\n    },\n    {\n      \"recipient\": { \"email\": \"b@ejemplo.com\" },\n      \"payload\": { \"nombre\": \"B\" },\n      \"idempotencyKey\": \"demo-batch-b-001\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "batch"
+              ]
+            },
+            "description": "Envío masivo (máx. 1000 items) con éxito parcial: responde `created` (ids) + `failed` (índice y error por item). Scope: notifications:send."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "SENT",
+                  "disabled": true
+                },
+                {
+                  "key": "channel",
+                  "value": "EMAIL",
+                  "disabled": true
+                },
+                {
+                  "key": "recipientUserId",
+                  "value": "{{userId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00Z",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31T23:59:59Z",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Listado paginado por cursor. Filtros: status (PENDING|QUEUED|PROCESSING|RETRY|SENT|DELIVERED|READ|FAILED|CANCELLED), channel (EMAIL|SMS|PUSH|IN_APP), recipientUserId, startDate/endDate (RFC3339). Pagina con `cursor` = `nextCursor` de la respuesta anterior. Scope: notifications:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Detalle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications/{{notificationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{notificationId}}"
+              ]
+            },
+            "description": "Detalle de una notificación por id. Scope: notifications:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancelar",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications/{{notificationId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{notificationId}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancela una notificación aún no enviada (pendiente o programada). Scope: notifications:send."
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar leída",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/notifications/{{notificationId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            },
+            "description": "Marca una notificación (típicamente IN_APP) como leída. Scope: notifications:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bandeja in-app",
+      "item": [
+        {
+          "name": "Inbox de un usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/inbox?userId={{userId}}&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "inbox"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "SENT",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Bandeja IN_APP de un usuario final (`userId` obligatorio). Equivale al listado filtrado por channel=IN_APP + recipientUserId. Scope: notifications:read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Preferencias",
+      "item": [
+        {
+          "name": "Obtener preferencias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{userId}}",
+                "preferences"
+              ]
+            },
+            "description": "Preferencias por canal del usuario. Defaults si nunca se fijaron: email=true, push=true, sms=false, inApp=true. Scope: notifications:read."
+          },
+          "response": []
+        },
+        {
+          "name": "Fijar preferencias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": true,\n  \"push\": true,\n  \"sms\": false,\n  \"inApp\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{userId}}",
+                "preferences"
+              ]
+            },
+            "description": "Crea/actualiza las preferencias del usuario. Un canal en `false` implica opt-out: no se le enviará por ese canal. Scope: notifications:send."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Eventos de proveedor",
+      "item": [
+        {
+          "name": "Evento bounce (suprime destinatario)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"bounce\",\n  \"channel\": \"EMAIL\",\n  \"recipient\": \"rebota@ejemplo.com\",\n  \"reason\": \"mailbox full\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "events"
+              ]
+            },
+            "description": "Reenvía un bounce/complaint de tu proveedor: añade el destinatario a la suppression list del canal (202 Accepted). `type`: bounce | complaint | delivered | opened. Scope: notifications:send."
+          },
+          "response": []
+        },
+        {
+          "name": "Evento delivered (confirma entrega)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"delivered\",\n  \"notificationId\": \"{{notificationId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "events"
+              ]
+            },
+            "description": "Confirma la entrega de una notificación (la marca DELIVERED). Requiere `notificationId`. Scope: notifications:send."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

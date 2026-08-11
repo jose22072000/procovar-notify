@@ -1,0 +1,52 @@
+Cambios 2026-07-16/17 (rama staging)
+====================================
+
+Panel (SPA)
+- Pestaña activa persiste al recargar (?tab=... en la URL).
+- Notificaciones: botón Actualizar + auto-refresco cada 10 s.
+- Plantillas: selector de idioma al crear; clonar a otro idioma (misma key, solo traducir);
+  vista previa desde el listado; formulario del editor reorganizado.
+- Tipos de notificación: prioridad de envío y retención editables (diálogo Ajustes).
+
+Fiabilidad (ningún mensaje se pierde ni se duplica)
+- Reaper (cada 1 min): reencola huérfanas (guardadas pero nunca encoladas por crash).
+- Rescate por idempotencia: el reintento del cliente reencola una huérfana al instante.
+- Proveedor caído (breaker abierto): reintento cada 45 s SIN consumir intentos; nada acaba
+  FAILED por una caída. Solo los errores permanentes fallan. Retención >1 h se loguea a ERROR.
+- Anti-duplicado: una reentrega tras crash post-envío marca SENT sin reenviar; el reaper
+  reconcilia PROCESSING atascadas; recurrentes idempotentes por tick.
+
+Prioridades y colas
+- Migración 00011: send_priority por Tipo; los envíos la heredan (override por request).
+- HIGH enruta a critical (antes no hacía nada). QUEUE_STRICT_PRIORITY (default true):
+  critical siempre primero. El batch rechaza URGENT/HIGH. Cola dedicada "webhooks".
+- QUEUE_RETRY_MAX ahora es real; QUEUE_SHUTDOWN_TIMEOUT_SECONDS=30 (antes 8 s cortaba
+  envíos en vuelo en cada deploy).
+
+Retención por Tipo (ahorro de disco)
+- Migración 00012: pii_retention_days (anonimiza; vacío hereda de la app) y retention_days
+  (borra notificación + intentos + logs; vacío = nunca). Barrido horario en el worker.
+- Regla: borrar >= anonimizar. En in-app, anonimizar rompe la bandeja: usar valores iguales.
+
+Rendimiento
+- Pool pgx dimensionado (DB_MAX_CONNS=20/DB_MIN_CONNS=2; antes 4 conexiones para 10 workers).
+- Caché TTL en el worker: ruta+SMTP descifrado (30 s) y plantilla (versión fijada 10 min).
+  Un cambio de ruta del admin tarda <= 30 s en aplicar.
+
+Observabilidad
+- Métricas con provider/reason; qbnotify_delivery_latency_seconds{channel,priority} (extremo a
+  extremo, el SLA real del OTP); qbnotify_queue_depth{queue,state} cada 30 s.
+- El request_id de la API viaja al worker: un envío se sigue de punta a punta en los logs.
+
+Bounces (migración 00013)
+- Un bounce/queja con notificationId marca la notificación BOUNCED (nuevo estado), deja log
+  y emite webhook notification.bounced/complained. Antes solo suprimía y quedaba SENT.
+
+Módulo Go
+- Renombrado github.com/divergtech-dev/qb-notify -> dvtech/qbn (imports más cortos).
+
+Despliegue
+- Migraciones 00011-00013 (go run ./cmd/migrate up). Envs nuevas opcionales:
+  QUEUE_STRICT_PRIORITY, QUEUE_SHUTDOWN_TIMEOUT_SECONDS, DB_MAX_CONNS, DB_MIN_CONNS.
+- Marcar URGENT los tipos donde el usuario espera (forgot-password, otp, verificación) y
+  fijar retención por Tipo en el panel.

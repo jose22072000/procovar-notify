@@ -1,0 +1,164 @@
+[
+  {
+    "key": "welcome-html",
+    "file": "welcome.html",
+    "name": "Bienvenida",
+    "category": "transactional",
+    "subject": "¡Bienvenido a {{appName}}! 🎉",
+    "description": "Email de bienvenida después del registro exitoso (Better Auth)",
+    "suggested": [
+      "appName",
+      "userName",
+      "email"
+    ]
+  },
+  {
+    "key": "email-verification-html",
+    "file": "email-verification.html",
+    "name": "Verificación de correo",
+    "category": "transactional",
+    "subject": "Verifica tu correo electrónico - {{appName}}",
+    "description": "Verificación de correo electrónico para nuevos usuarios (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "otp-verification-html",
+    "file": "otp-verification.html",
+    "name": "Código de verificación (OTP)",
+    "category": "security",
+    "subject": "Tu código de verificación: {{otpCode}} - {{appName}}",
+    "description": "Código OTP para verificación de dos factores (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "otpCode",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "forgot-password-html",
+    "file": "forgot-password.html",
+    "name": "Recuperar contraseña",
+    "category": "transactional",
+    "subject": "Recupera tu contraseña - {{appName}}",
+    "description": "Solicitud de recuperación de contraseña (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "password-reset-success-html",
+    "file": "password-reset-success.html",
+    "name": "Contraseña actualizada",
+    "category": "security",
+    "subject": "Tu contraseña ha sido actualizada - {{appName}}",
+    "description": "Confirmación de contraseña restablecida exitosamente (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "changedAt"
+    ]
+  },
+  {
+    "key": "magic-link-html",
+    "file": "magic-link.html",
+    "name": "Enlace de acceso",
+    "category": "transactional",
+    "subject": "Tu enlace de acceso a {{appName}}",
+    "description": "Enlace mágico para inicio de sesión sin contraseña (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "magicLinkUrl",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "invitation-html",
+    "file": "invitation.html",
+    "name": "Invitación",
+    "category": "transactional",
+    "subject": "{{inviterName}} te ha invitado a {{appName}}",
+    "description": "Invitación para unirse a la plataforma u organización (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "inviterName",
+      "invitationUrl",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "email-change-html",
+    "file": "email-change.html",
+    "name": "Cambio de correo",
+    "category": "security",
+    "subject": "Confirma tu nuevo correo electrónico - {{appName}}",
+    "description": "Verificación de cambio de correo electrónico (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "currentEmail",
+      "newEmail",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "account-deletion-html",
+    "file": "account-deletion.html",
+    "name": "Eliminar cuenta",
+    "category": "security",
+    "subject": "Confirma la eliminación de tu cuenta - {{appName}}",
+    "description": "Confirmación de solicitud de eliminación de cuenta (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "confirmationUrl",
+      "expirationTime"
+    ]
+  },
+  {
+    "key": "security-alert-html",
+    "file": "security-alert.html",
+    "name": "Alerta de seguridad",
+    "category": "security",
+    "subject": "⚠️ Alerta de seguridad - {{appName}}",
+    "description": "Alerta de seguridad por actividad sospechosa (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "alertType"
+    ]
+  },
+  {
+    "key": "two-factor-enabled-html",
+    "file": "two-factor-enabled.html",
+    "name": "2FA activado",
+    "category": "security",
+    "subject": "Autenticación de dos factores activada - {{appName}}",
+    "description": "Confirmación de activación de autenticación de dos factores (Better Auth)",
+    "suggested": [
+      "appName",
+      "email"
+    ]
+  },
+  {
+    "key": "two-factor-disabled-html",
+    "file": "two-factor-disabled.html",
+    "name": "2FA desactivado",
+    "category": "security",
+    "subject": "Autenticación de dos factores desactivada - {{appName}}",
+    "description": "Confirmación de desactivación de autenticación de dos factores (Better Auth)",
+    "suggested": [
+      "appName",
+      "email",
+      "changedAt"
+    ]
+  }
+]

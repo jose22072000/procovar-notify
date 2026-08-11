@@ -1,0 +1,30 @@
+# SPA de administración (React/Vite), imagen "frontend". Multi-stage: compila
+# el bundle con Node y lo sirve con nginx (solo estáticos + fallback SPA; el
+# backend es público y el navegador lo llama directo, sin proxy). El código
+# vive en frontend/; construir desde la RAÍZ del repo (el contexto necesita
+# frontend/ y deploy/):
+#   docker build -f deploy/Dockerfile.frontend -t notify-frontend --build-arg VITE_API_URL=https://api.tu-dominio.com .
+FROM node:20-alpine AS build
+WORKDIR /web
+
+# Cache de dependencias.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+# URL pública del api: se hornea en el bundle estático en build-time (Vite solo
+# expone import.meta.env.VITE_* al compilar, no en runtime).
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
+# Código y build de producción → /web/dist.
+COPY frontend/ ./
+RUN npm run build
+
+# Servido estático por nginx (sin proxy: el backend es público). WEB_PORT es
+# configurable en runtime (envsubst de la plantilla al arrancar), igual que
+# API_PORT en el backend.
+FROM nginx:alpine
+ENV WEB_PORT=50001
+COPY deploy/default.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /web/dist /usr/share/nginx/html
+EXPOSE ${WEB_PORT}

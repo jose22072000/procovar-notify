@@ -1,0 +1,29 @@
+# Worker del v2 (Go, asynq), imagen "services": consume la cola y envía las
+# notificaciones. Sin él, el backend encola pero nada se procesa. El código Go
+# vive en backend/; construir desde la RAÍZ del repo (el contexto necesita
+# backend/):
+#   docker build -f deploy/Dockerfile.services -t notify-services .
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+
+# git: necesario si algún módulo se resuelve por VCS directo (GOPROXY=...,direct).
+RUN apk add --no-cache git
+
+# GOPROXY configurable (por defecto el oficial). Mirror opcional:
+#   --build-arg GOPROXY=https://goproxy.io,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ .
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
+
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=build /out/worker /app/worker
+EXPOSE 9091
+USER nonroot:nonroot
+ENTRYPOINT ["/app/worker"]

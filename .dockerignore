@@ -1,0 +1,14 @@
+# No enviar al contexto de build lo que no hace falta (más rápido y ligero).
+.git
+.github
+node_modules
+frontend/node_modules
+frontend/dist
+backend/bin
+bin
+*.test
+*.out
+coverage.out
+memory
+.agents
+docs
