@@ -26,11 +26,19 @@ type AdminQuerier interface {
 type AdminAuthenticator struct {
 	q      AdminQuerier
 	issuer *TokenIssuer
+	// hub es procovar-auth. nil = SSO apagado y todo funciona como antes.
+	hub *ProcovarAuth
 }
 
 // NewAdminAuthenticator crea el autenticador de administración.
 func NewAdminAuthenticator(q AdminQuerier, issuer *TokenIssuer) *AdminAuthenticator {
 	return &AdminAuthenticator{q: q, issuer: issuer}
+}
+
+// ConHub engancha procovar-auth. Con hub nil el comportamiento no cambia.
+func (a *AdminAuthenticator) ConHub(h *ProcovarAuth) *AdminAuthenticator {
+	a.hub = h
+	return a
 }
 
 // Mismo mensaje para email inexistente o password incorrecto (no revelar cuál).
@@ -120,18 +128,82 @@ func (a *AdminAuthenticator) Logout(ctx context.Context, refreshToken string) er
 // la identidad del admin en el contexto.
 func (a *AdminAuthenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, ok := bearerToken(r)
-		if !ok {
-			httpx.WriteProblem(w, r, apperr.Unauthorized("unauthenticated", "Missing bearer token"))
-			return
-		}
-		admin, err := a.issuer.ParseAccess(token)
-		if err != nil {
+		// 1) El camino de siempre: token propio de Avisos.
+		if token, ok := bearerToken(r); ok {
+			admin, err := a.issuer.ParseAccess(token)
+			if err == nil {
+				next.ServeHTTP(w, r.WithContext(ContextWithAdmin(r.Context(), admin)))
+				return
+			}
+			// Un bearer presente pero malo es un error, no una invitación a
+			// probar el SSO: quien manda un token caducado espera que se lo
+			// digan, no acabar entrando como otra identidad.
 			httpx.WriteProblem(w, r, apperr.Unauthorized("invalid_token", "Invalid or expired token"))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(ContextWithAdmin(r.Context(), admin)))
+
+		// 2) Sin bearer: la sesión única de Procovar (procovar-auth).
+		if admin, ok := a.desdeProcovar(r); ok {
+			next.ServeHTTP(w, r.WithContext(ContextWithAdmin(r.Context(), admin)))
+			return
+		}
+
+		httpx.WriteProblem(w, r, apperr.Unauthorized("unauthenticated", "Missing bearer token"))
 	})
+}
+
+// desdeProcovar intenta identificar a quien entra por la cookie de sesión de
+// procovar-auth.
+//
+// Devuelve (Admin, false) y NO escribe nada cuando no aplica —hub sin
+// configurar, sin cookie, sesión mala o sin el permiso de Avisos—, para que el
+// llamante responda un 401 igual que antes. Distinguir aquí entre "no tiene
+// cookie" y "tiene cookie pero no le toca" solo serviría para que alguien de
+// fuera averigüe quién tiene acceso.
+func (a *AdminAuthenticator) desdeProcovar(r *http.Request) (Admin, bool) {
+	if a.hub == nil {
+		return Admin{}, false
+	}
+	c, err := r.Cookie(a.hub.CookieName())
+	if err != nil || c.Value == "" {
+		return Admin{}, false
+	}
+	ses, err := a.hub.VerifySession(r.Context(), c.Value)
+	if err != nil {
+		return Admin{}, false
+	}
+	// La llave de entrada. Sin ella no se pasa, aunque la sesión sea buena:
+	// estar dado de alta en Procovar no es estar dado de alta en Avisos.
+	if !ses.Puede(PermisoAvisosEntrar) {
+		return Admin{}, false
+	}
+	// Quien administra Avisos lo administra entero: los tipos, las plantillas y
+	// los canales son de la plataforma, no de una sucursal.
+	rol := "APP_ADMIN"
+	if ses.IsSystemAdmin || ses.Puede(PermisoAvisosManage) {
+		rol = "SUPER_ADMIN"
+	}
+	return Admin{ID: idDeProcovar(ses.UserID), Role: rol}, true
+}
+
+// Claves del catálogo de procovar-auth que gobiernan Avisos.
+const (
+	PermisoAvisosEntrar = "avisos.entrar"
+	PermisoAvisosManage = "avisos.manage"
+)
+
+// idDeProcovar convierte el id de usuario del hub —que es una cadena, no un
+// UUID— en un UUID estable, porque `Admin.ID` es un uuid.UUID y se usa como
+// autor en la auditoría.
+//
+// Determinista a propósito: la misma persona tiene que dejar siempre la misma
+// huella en la auditoría, entre reinicios y entre instancias. Un UUID aleatorio
+// por sesión convertiría el registro de auditoría en ruido.
+func idDeProcovar(userID string) uuid.UUID {
+	if u, err := uuid.Parse(userID); err == nil {
+		return u
+	}
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte("procovar-auth:"+userID))
 }
 
 // RequireSuperAdmin exige rol SUPER_ADMIN. Debe montarse tras Middleware.

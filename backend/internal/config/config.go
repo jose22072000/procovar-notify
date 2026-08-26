@@ -57,6 +57,15 @@ type Config struct {
 	// navegador. Vacío = CORS deshabilitado (comportamiento previo).
 	CORSAllowedOrigins []string
 
+	// procovar-auth (hub de identidad). Todo opcional: si falta la URL, la
+	// clave o el cliente, el SSO queda apagado y Avisos sigue con su login
+	// propio, exactamente como antes.
+	ProcovarAuthURL           string
+	ProcovarAuthClientID      string
+	ProcovarAuthSigningKey    string
+	ProcovarAuthKeyVersion    string
+	ProcovarSessionCookieName string
+
 	// Cookie del refresh token (HttpOnly). Sus atributos dependen de la topología
 	// de despliegue: mismo dominio → SameSite=Lax basta; dominios distintos →
 	// SameSite=None + Secure (y HTTPS). En dev (proxy de Vite, mismo origen sobre
@@ -116,24 +125,29 @@ func Load() (*Config, error) {
 	v.SetDefault("COOKIE_SECURE", false)
 
 	cfg := &Config{
-		AppEnv:                   v.GetString("APP_ENV"),
-		Debug:                    v.GetBool("DEBUG"),
-		APIPort:                  v.GetInt("API_PORT"),
-		MetricsPort:              v.GetInt("METRICS_PORT"),
-		WorkerConcurrency:        v.GetInt("WORKER_CONCURRENCY"),
-		DatabaseURL:              v.GetString("DATABASE_URL"),
-		AdminJWTSecret:           v.GetString("ADMIN_JWT_SECRET"),
-		QueueRetryMax:            v.GetInt("QUEUE_RETRY_MAX"),
-		QueueStrictPriority:      v.GetBool("QUEUE_STRICT_PRIORITY"),
-		QueueShutdownTimeoutSecs: v.GetInt("QUEUE_SHUTDOWN_TIMEOUT_SECONDS"),
-		DBMaxConns:               v.GetInt("DB_MAX_CONNS"),
-		DBMinConns:               v.GetInt("DB_MIN_CONNS"),
-		HMACTimestampSkewSecs:    v.GetInt("HMAC_TIMESTAMP_SKEW_SECONDS"),
-		CORSAllowedOrigins:       splitAndTrim(v.GetString("CORS_ALLOWED_ORIGINS")),
-		CookieRefreshName:        v.GetString("COOKIE_REFRESH_NAME"),
-		CookieDomain:             v.GetString("COOKIE_DOMAIN"),
-		CookieSecure:             v.GetBool("COOKIE_SECURE"),
-		CookieSameSite:           parseSameSite(v.GetString("COOKIE_SAMESITE")),
+		AppEnv:                    v.GetString("APP_ENV"),
+		Debug:                     v.GetBool("DEBUG"),
+		APIPort:                   v.GetInt("API_PORT"),
+		MetricsPort:               v.GetInt("METRICS_PORT"),
+		WorkerConcurrency:         v.GetInt("WORKER_CONCURRENCY"),
+		DatabaseURL:               v.GetString("DATABASE_URL"),
+		AdminJWTSecret:            v.GetString("ADMIN_JWT_SECRET"),
+		QueueRetryMax:             v.GetInt("QUEUE_RETRY_MAX"),
+		QueueStrictPriority:       v.GetBool("QUEUE_STRICT_PRIORITY"),
+		QueueShutdownTimeoutSecs:  v.GetInt("QUEUE_SHUTDOWN_TIMEOUT_SECONDS"),
+		DBMaxConns:                v.GetInt("DB_MAX_CONNS"),
+		DBMinConns:                v.GetInt("DB_MIN_CONNS"),
+		HMACTimestampSkewSecs:     v.GetInt("HMAC_TIMESTAMP_SKEW_SECONDS"),
+		CORSAllowedOrigins:        splitAndTrim(v.GetString("CORS_ALLOWED_ORIGINS")),
+		ProcovarAuthURL:           v.GetString("PROCOVAR_AUTH_URL"),
+		ProcovarAuthClientID:      v.GetString("PROCOVAR_AUTH_CLIENT_ID"),
+		ProcovarAuthSigningKey:    v.GetString("PROCOVAR_AUTH_SIGNING_KEY"),
+		ProcovarAuthKeyVersion:    v.GetString("PROCOVAR_AUTH_KEY_VERSION"),
+		ProcovarSessionCookieName: v.GetString("PROCOVAR_SESSION_COOKIE"),
+		CookieRefreshName:         v.GetString("COOKIE_REFRESH_NAME"),
+		CookieDomain:              v.GetString("COOKIE_DOMAIN"),
+		CookieSecure:              v.GetBool("COOKIE_SECURE"),
+		CookieSameSite:            parseSameSite(v.GetString("COOKIE_SAMESITE")),
 		Redis: RedisConfig{
 			Sentinels:    splitAndTrim(v.GetString("REDIS_SENTINELS")),
 			MasterName:   v.GetString("REDIS_MASTER_NAME"),

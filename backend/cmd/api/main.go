@@ -113,6 +113,22 @@ func run() error {
 	authRateLimiter := auth.NewRateLimiter(rds.Client, cfg.Redis.Prefix, authRateLimitRPS, authRateLimitBurst)
 	adminAuth := auth.NewAdminAuthenticator(db.Q, auth.NewTokenIssuer(cfg.AdminJWTSecret))
 
+	// Sesión única de Procovar. Si no está configurado, hub es nil y el
+	// middleware se comporta igual que siempre (login propio y nada más).
+	hub, err := auth.NewProcovarAuth(
+		cfg.ProcovarAuthURL, cfg.ProcovarAuthClientID, cfg.ProcovarAuthSigningKey,
+		cfg.ProcovarAuthKeyVersion, cfg.ProcovarSessionCookieName,
+	)
+	if err != nil {
+		// Configuración a medias: se avisa y se sigue con el login propio. Caerse
+		// al arrancar dejaría Avisos inaccesible por una variable mal puesta.
+		slog.Error("procovar-auth mal configurado: el SSO queda apagado", "error", err)
+	}
+	if hub != nil {
+		adminAuth = adminAuth.ConHub(hub)
+		slog.Info("SSO con procovar-auth activo", "url", cfg.ProcovarAuthURL, "cliente", cfg.ProcovarAuthClientID)
+	}
+
 	// Cliente de cola + servicio de notificaciones (con cuotas por tenant).
 	queueClient := queue.NewClient(cfg.Redis)
 	defer func() { _ = queueClient.Close() }()
