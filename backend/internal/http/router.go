@@ -7,8 +7,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"dvtech/qbn/internal/apperr"
 	"dvtech/qbn/internal/auth"
 	"dvtech/qbn/internal/domain"
+	"dvtech/qbn/internal/httpx"
 	"dvtech/qbn/internal/metrics"
 	"dvtech/qbn/internal/observability"
 )
@@ -29,6 +31,22 @@ type RouterDeps struct {
 	// CORSAllowedOrigins: orígenes permitidos para llamar a /admin desde el
 	// navegador (el SPA vive en otro origen cuando no hay proxy delante).
 	CORSAllowedOrigins []string
+
+	// SSO: entrada por procovar-auth. nil = SSO apagado.
+	SSO *SSOHandler
+
+	// SoloSSO apaga el login propio de Avisos (email + contraseña).
+	//
+	// Con esto en true, las cuentas de Avisos dejan de existir de cara al
+	// usuario: quien administra es quien procovar-auth diga, con el permiso
+	// `avisos.entrar`. Es lo que pidió Jose — "que lo controle auth", no que
+	// Avisos lleve su propia lista de gente.
+	//
+	// Se deja como INTERRUPTOR y no borrando el código: el día que el hub esté
+	// caído, poner SSO_ONLY=false devuelve una puerta de entrada. Un servicio de
+	// avisos que no se puede administrar cuando algo va mal es justo el que hace
+	// falta cuando algo va mal.
+	SoloSSO bool
 
 	// RefreshCookie: config de la cookie HttpOnly del refresh token.
 	RefreshCookie CookieConfig
@@ -106,9 +124,23 @@ func NewRouter(deps RouterDeps) http.Handler {
 		// Login/refresh: públicos pero con rate-limit por IP (anti fuerza bruta).
 		adm.Group(func(authRoutes chi.Router) {
 			authRoutes.Use(deps.AuthRateLimiter.IPMiddleware)
-			authRoutes.Post("/auth/login", adminHandler.Login)
+			if deps.SoloSSO {
+				// Se responde 403 en vez de 404 a proposito: un 404 parece un
+				// despliegue roto y manda a alguien a buscar por donde no es.
+				authRoutes.Post("/auth/login", func(w http.ResponseWriter, r *http.Request) {
+					httpx.WriteProblem(w, r, apperr.Forbidden("sso_only",
+						"Avisos ya no tiene login propio: se entra con la cuenta de Procovar"))
+				})
+			} else {
+				authRoutes.Post("/auth/login", adminHandler.Login)
+			}
 			authRoutes.Post("/auth/refresh", adminHandler.Refresh)
 			authRoutes.Post("/auth/logout", adminHandler.Logout)
+			// Entrada por procovar-auth. Publicas: son el camino PARA entrar.
+			if deps.SSO.Disponible() {
+				authRoutes.Get("/auth/sso/login", deps.SSO.Login)
+				authRoutes.Get("/auth/sso/callback", deps.SSO.Callback)
+			}
 		})
 
 		adm.Group(func(protected chi.Router) {

@@ -65,6 +65,11 @@ type Config struct {
 	ProcovarAuthSigningKey    string
 	ProcovarAuthKeyVersion    string
 	ProcovarSessionCookieName string
+	// SoloSSO apaga el login propio (email + contraseña) de Avisos.
+	SoloSSO bool
+	// URL publica de la pantalla y de la API, para armar el redirect del SSO.
+	AppURL string
+	APIURL string
 
 	// Cookie del refresh token (HttpOnly). Sus atributos dependen de la topología
 	// de despliegue: mismo dominio → SameSite=Lax basta; dominios distintos →
@@ -144,6 +149,9 @@ func Load() (*Config, error) {
 		ProcovarAuthSigningKey:    v.GetString("PROCOVAR_AUTH_SIGNING_KEY"),
 		ProcovarAuthKeyVersion:    v.GetString("PROCOVAR_AUTH_KEY_VERSION"),
 		ProcovarSessionCookieName: v.GetString("PROCOVAR_SESSION_COOKIE"),
+		SoloSSO:                   v.GetBool("SSO_ONLY"),
+		AppURL:                    v.GetString("APP_URL"),
+		APIURL:                    v.GetString("API_URL"),
 		CookieRefreshName:         v.GetString("COOKIE_REFRESH_NAME"),
 		CookieDomain:              v.GetString("COOKIE_DOMAIN"),
 		CookieSecure:              v.GetBool("COOKIE_SECURE"),

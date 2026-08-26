@@ -1,101 +1,79 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Lock, Mail, Loader2, LogIn } from "lucide-react";
-import { useAuth } from "@/auth/auth";
-import { ApiError } from "@/api/client";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Loader2, LogIn, AlertTriangle } from "lucide-react";
+import { API_BASE } from "@/api/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
-// Mensaje genérico: nunca revela si falló el email o la contraseña.
-function loginErrorMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 429) return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
-    if (err.status >= 500) return "El servicio no está disponible ahora mismo. Inténtalo más tarde.";
-    return "Las credenciales son incorrectas.";
-  }
-  return "No se pudo conectar. Revisa tu conexión e inténtalo de nuevo.";
-}
+/**
+ * Entrada a Avisos.
+ *
+ * Avisos ya NO tiene login propio. Quien administra es quien diga
+ * procovar-auth, con el permiso `avisos.entrar` — una sola lista de gente para
+ * todo Procovar, y una sola baja el día que alguien se va.
+ *
+ * Por eso esta pantalla no pide nada: manda al hub y vuelve. Solo se para a
+ * enseñar algo cuando el viaje falla, para no dejar a nadie delante de una
+ * pantalla en blanco sin saber qué pasó.
+ */
+
+const MOTIVOS: Record<string, string> = {
+  "no-disponible": "No se pudo contactar con Procovar. Inténtalo en un momento.",
+  "sin-codigo": "La vuelta desde Procovar llegó incompleta. Prueba otra vez.",
+  "canje-fallido": "Procovar no reconoció la entrada. Prueba otra vez.",
+  "sin-permiso": "Tu cuenta de Procovar no tiene acceso a Avisos. Habla con quien administre los permisos.",
+};
 
 export default function Login() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [params] = useSearchParams();
+  const motivo = params.get("sso");
+  const destino = `${API_BASE}/admin/auth/sso/login`;
+  const [yendo, setYendo] = useState(!motivo);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await login(email, password);
-      navigate("/apps");
-    } catch (err) {
-      setError(loginErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+  // Sin motivo de error, se va directo: nadie tiene por qué dar un clic de más
+  // para hacer lo único que se puede hacer aquí.
+  useEffect(() => {
+    if (motivo) return;
+    window.location.replace(destino);
+  }, [motivo, destino]);
+
+  function reintentar() {
+    setYendo(true);
+    window.location.replace(destino);
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-muted/40 to-muted px-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm">
-        <div className="mb-5 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Inicia sesión</h1>
-          <p className="text-sm text-muted-foreground">Accede al panel de administración.</p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-6 border border-border p-8">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Avisos</h1>
+          <p className="text-sm text-muted-foreground">
+            Se entra con tu cuenta de Procovar.
+          </p>
         </div>
 
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                autoFocus
-                placeholder="tu@empresa.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={busy}
-                required
-                className="pl-9"
-              />
-            </div>
+        {motivo && (
+          <div
+            role="alert"
+            className="flex gap-2 border border-destructive/50 p-3 text-sm text-destructive"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>{MOTIVOS[motivo] ?? "No se pudo entrar. Inténtalo otra vez."}</span>
           </div>
+        )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={busy}
-                required
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
+        <Button className="w-full" onClick={reintentar} disabled={yendo}>
+          {yendo ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              Yendo a Procovar…
+            </>
+          ) : (
+            <>
+              <LogIn className="mr-2 h-4 w-4" aria-hidden />
+              Entrar con Procovar
+            </>
           )}
-
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-            {busy ? "Entrando…" : "Entrar"}
-          </Button>
-        </form>
+        </Button>
       </div>
     </div>
   );

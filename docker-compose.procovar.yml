@@ -46,6 +46,13 @@ services:
       PROCOVAR_AUTH_SIGNING_KEY: ${PROCOVAR_AUTH_SIGNING_KEY:-}
       PROCOVAR_AUTH_KEY_VERSION: ${PROCOVAR_AUTH_KEY_VERSION:-1}
       PROCOVAR_SESSION_COOKIE: ${PROCOVAR_SESSION_COOKIE:-__Secure-qb.session_token}
+      # Avisos deja de tener login propio: quien administra lo dice procovar-auth.
+      # Es un interruptor y no un borrado: con el hub caido, SSO_ONLY=false
+      # devuelve una puerta de entrada.
+      SSO_ONLY: ${SSO_ONLY:-false}
+      # URLs publicas, para armar el redirect de ida y vuelta al hub.
+      APP_URL: ${APP_URL:-https://avisos.procovar.cloud}
+      API_URL: ${API_URL:-https://avisos-api.procovar.cloud}
       HMAC_TIMESTAMP_SKEW_SECONDS: "300"
       CORS_ALLOWED_ORIGINS: https://avisos.procovar.cloud
       # El guardia anti-SSRF se queda ENCENDIDO.

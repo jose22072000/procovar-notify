@@ -126,7 +126,15 @@ func run() error {
 	}
 	if hub != nil {
 		adminAuth = adminAuth.ConHub(hub)
-		slog.Info("SSO con procovar-auth activo", "url", cfg.ProcovarAuthURL, "cliente", cfg.ProcovarAuthClientID)
+		slog.Info("SSO con procovar-auth activo", "url", cfg.ProcovarAuthURL, "cliente", cfg.ProcovarAuthClientID,
+			"solo_sso", cfg.SoloSSO)
+	}
+	if cfg.SoloSSO && hub == nil {
+		// Es la combinacion que deja a TODO EL MUNDO fuera: sin login propio y
+		// sin hub con el que entrar. Se avisa fuerte y se deja el login propio
+		// encendido, que es preferible a un servicio inaccesible.
+		slog.Error("SSO_ONLY=true pero el hub no esta configurado: se mantiene el login propio")
+		cfg.SoloSSO = false
 	}
 
 	// Cliente de cola + servicio de notificaciones (con cuotas por tenant).
@@ -151,6 +159,8 @@ func run() error {
 		AdminResource:      xhttp.NewAdminResourceHandler(adminSvc),
 		AdminMonitor:       xhttp.NewAdminMonitorHandler(monitorSvc, notifSvc),
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
+		SSO:                xhttp.NewSSOHandler(hub, cfg.AppURL, cfg.APIURL, cfg.CookieSecure),
+		SoloSSO:            cfg.SoloSSO,
 		RefreshCookie: xhttp.CookieConfig{
 			Name:     cfg.CookieRefreshName,
 			Domain:   cfg.CookieDomain,

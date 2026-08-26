@@ -190,3 +190,73 @@ func trimSlash(s string) string {
 	}
 	return s
 }
+
+// ── Flujo de entrada (redirect a procovar-auth) ──────────────────────────────
+//
+// Aceptar la cookie no basta: si la persona no ha entrado en Procovar todavia,
+// no hay cookie que aceptar. Hace falta MANDARLA a entrar, que es lo que hacen
+// las demas aplicaciones (ver procovar-auth/docs/CONSUMER-PATTERN.md y
+// procovar-rutas/api/internal/api/session.go, que es la implementacion de
+// referencia).
+//
+//	/admin/auth/sso/login    -> pide un callback token y redirige al hub
+//	/admin/auth/sso/callback -> vuelve con ?code=…, se canjea por la sesion
+
+// CrearTokenDeVuelta pide al hub la URL a la que mandar a la persona.
+func (p *ProcovarAuth) CrearTokenDeVuelta(ctx context.Context, callbackURL, volverA string) (string, error) {
+	var res struct {
+		RedirectURL string `json:"redirectUrl"`
+	}
+	err := p.llamar(ctx, "/api/auth/callback-token", map[string]string{
+		"clientId":    p.clientID,
+		"callbackUrl": callbackURL,
+		"returnTo":    volverA,
+	}, &res)
+	if err != nil {
+		return "", err
+	}
+	if res.RedirectURL == "" {
+		return "", fmt.Errorf("procovar-auth no devolvio a donde ir")
+	}
+	return res.RedirectURL, nil
+}
+
+// Canjear cambia el codigo de un solo uso por la sesion.
+func (p *ProcovarAuth) Canjear(ctx context.Context, codigo string) (token string, volverA string, err error) {
+	var res struct {
+		SessionToken string `json:"sessionToken"`
+		ReturnTo     string `json:"returnTo"`
+	}
+	if err := p.llamar(ctx, "/api/auth/exchange", map[string]string{"code": codigo}, &res); err != nil {
+		return "", "", err
+	}
+	if res.SessionToken == "" {
+		return "", "", fmt.Errorf("procovar-auth no devolvio sesion")
+	}
+	return res.SessionToken, res.ReturnTo, nil
+}
+
+// llamar hace un POST firmado al hub y decodifica la respuesta.
+func (p *ProcovarAuth) llamar(ctx context.Context, path string, cuerpo any, salida any) error {
+	body, err := json.Marshal(cuerpo)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	p.firmar(req, http.MethodPost, path, body)
+
+	res, err := p.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("procovar-auth no responde: %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 4<<10))
+		return fmt.Errorf("procovar-auth devolvio %d en %s", res.StatusCode, path)
+	}
+	return json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(salida)
+}

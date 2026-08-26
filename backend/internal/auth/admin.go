@@ -164,11 +164,23 @@ func (a *AdminAuthenticator) desdeProcovar(r *http.Request) (Admin, bool) {
 	if a.hub == nil {
 		return Admin{}, false
 	}
-	c, err := r.Cookie(a.hub.CookieName())
-	if err != nil || c.Value == "" {
+	// Dos cookies posibles, y las dos valen:
+	//   · la PROPIA (`avisos_sso`), que grabamos nosotros al volver del hub
+	//   · la COMPARTIDA del hub, que solo llega si ambos cuelgan del mismo
+	//     dominio raiz
+	// Aceptar las dos hace que esto siga funcionando el dia que cambie la
+	// topologia de dominios, sin tocar codigo.
+	valor := ""
+	for _, nombre := range []string{CookieSSOPropia, a.hub.CookieName()} {
+		if c, err := r.Cookie(nombre); err == nil && c.Value != "" {
+			valor = c.Value
+			break
+		}
+	}
+	if valor == "" {
 		return Admin{}, false
 	}
-	ses, err := a.hub.VerifySession(r.Context(), c.Value)
+	ses, err := a.hub.VerifySession(r.Context(), valor)
 	if err != nil {
 		return Admin{}, false
 	}
@@ -187,6 +199,9 @@ func (a *AdminAuthenticator) desdeProcovar(r *http.Request) (Admin, bool) {
 }
 
 // Claves del catálogo de procovar-auth que gobiernan Avisos.
+// CookieSSOPropia la graba Avisos al volver del hub (ver internal/http/sso_handlers.go).
+const CookieSSOPropia = "avisos_sso"
+
 const (
 	PermisoAvisosEntrar = "avisos.entrar"
 	PermisoAvisosManage = "avisos.manage"
