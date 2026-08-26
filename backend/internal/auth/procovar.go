@@ -52,7 +52,12 @@ func NewProcovarAuth(baseURL, clientID, signingKeyHex, keyVersion, cookieName st
 		keyVersion = "1"
 	}
 	if cookieName == "" {
-		cookieName = "procovar.session_token"
+		// OJO con el nombre. En produccion better-auth le pone el prefijo
+		// `__Secure-` y el prefijo de proyecto sigue siendo `qb`, no
+		// `procovar`: el renombrado a `procovar` se quedo en una rama que no
+		// llego a produccion. Si esto no coincide EXACTAMENTE, r.Cookie()
+		// devuelve ErrNoCookie, se cae al login propio y nadie ve ningun error.
+		cookieName = "__Secure-qb.session_token"
 	}
 	return &ProcovarAuth{
 		baseURL:    trimSlash(baseURL),
