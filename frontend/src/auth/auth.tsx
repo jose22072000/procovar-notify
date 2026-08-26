@@ -105,6 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    // Se borra la marca de "ya fui al hub" (index.html) para que la siguiente
+    // visita vuelva a saltar sola. Sin esto, quien cierra sesión se queda en
+    // esta pestaña viendo la pantalla de Avisos en vez de ir a Procovar.
+    try {
+      sessionStorage.removeItem("sso_ida");
+    } catch {
+      /* sin almacenamiento */
+    }
     // Avisa al servidor para revocar el refresh (incrementa token_version) y
     // borrar la cookie; el fallo de red no debe impedir cerrar sesión localmente.
     // Promise.resolve envuelve el fire-and-forget para no lanzar si post no

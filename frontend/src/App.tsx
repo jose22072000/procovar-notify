@@ -19,7 +19,13 @@ const EditorRoute = () => (
 );
 
 function Protected({ children }: { children: ReactNode }) {
-  const { admin } = useAuth();
+  const { admin, comprobando } = useAuth();
+  // Mientras se comprueba si ya hay sesión de Procovar NO se pinta nada.
+  //
+  // Antes se navegaba a /login de inmediato, así que se veía la pantalla de
+  // Avisos un instante antes de saltar al hub. Enseñar y quitar es peor que no
+  // enseñar: parece que la aplicación se equivocó y se corrigió sola.
+  if (comprobando) return null;
   return admin ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
@@ -52,7 +58,10 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const { admin } = useAuth();
+  const { admin, comprobando } = useAuth();
+  // Nada en pantalla hasta saber si ya hay sesión: ni el panel ni el login.
+  // Es lo que evita el parpadeo de "Avisos" antes de saltar al hub.
+  if (comprobando) return null;
   return (
     <Routes>
       <Route path="/login" element={admin ? <Navigate to="/apps" replace /> : <Login />} />

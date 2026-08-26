@@ -41,6 +41,11 @@ export default function Login() {
     window.location.replace(destino);
   }
 
+  // Si se va al hub, no se pinta NADA. Enseñar la caja de Avisos medio segundo
+  // antes de saltar hace pensar que la aplicación se equivocó y se corrigió
+  // sola. Solo hay pantalla cuando de verdad hay algo que contar (un error).
+  if (!motivo) return null;
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6 border border-border p-8">

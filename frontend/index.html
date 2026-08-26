@@ -15,6 +15,38 @@
         } catch (e) {}
       })();
     </script>
+    <script>
+      // Ir al hub ANTES de cargar la aplicación.
+      //
+      // Avisos no tiene login propio: quien entra lo dice procovar-auth. Si esto
+      // se hiciera desde React haría falta bajar el paquete entero (medio mega),
+      // montar la aplicación y pintar la pantalla de Avisos para, acto seguido,
+      // saltar a otro sitio. Se ve el parpadeo y parece que la aplicación se
+      // equivocó y se corrigió sola. Aquí se sale antes de pedir el paquete.
+      (function () {
+        try {
+          // Ya hay sesión guardada: que arranque con normalidad.
+          if (localStorage.getItem("qbn_admin")) return;
+
+          // UNA sola redirección automática por pestaña. Sin esto, quien vuelve
+          // del hub sin sesión válida entra en un bucle infinito de saltos entre
+          // Avisos y auth, que además deja el navegador inutilizable.
+          if (sessionStorage.getItem("sso_ida")) return;
+
+          // Página de error del SSO (?sso=…): hay algo que contar, se pinta.
+          if (location.search.indexOf("sso=") !== -1) return;
+
+          var api = "%VITE_API_URL%";
+          // Sin configurar, Vite deja el marcador tal cual: no se toca nada.
+          if (!api || api.charAt(0) === "%") return;
+
+          sessionStorage.setItem("sso_ida", "1");
+          location.replace(api + "/admin/auth/sso/login?returnTo=" + encodeURIComponent(location.href));
+        } catch (e) {
+          /* sin almacenamiento: que arranque la aplicación y se apañe */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
