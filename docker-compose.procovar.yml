@@ -33,6 +33,19 @@ services:
       SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY}
       SECRET_ENCRYPTION_KEY_VERSION: "1"
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      # SSO con procovar-auth. Opcional: sin la clave, el hub queda apagado y
+      # Avisos sigue con su login propio (ver backend/internal/auth/procovar.go).
+      #
+      # Van declaradas AQUI a proposito: este compose mapea las variables una a
+      # una, asi que ponerlas solo en el panel de Dokploy no las hace llegar al
+      # contenedor. Quedarian puestas y sin efecto, que es de lo peor de depurar:
+      # el panel las ensena, el contenedor no las tiene, y el sintoma es un 401
+      # identico al de una cookie mala.
+      PROCOVAR_AUTH_URL: ${PROCOVAR_AUTH_URL:-}
+      PROCOVAR_AUTH_CLIENT_ID: ${PROCOVAR_AUTH_CLIENT_ID:-}
+      PROCOVAR_AUTH_SIGNING_KEY: ${PROCOVAR_AUTH_SIGNING_KEY:-}
+      PROCOVAR_AUTH_KEY_VERSION: ${PROCOVAR_AUTH_KEY_VERSION:-1}
+      PROCOVAR_SESSION_COOKIE: ${PROCOVAR_SESSION_COOKIE:-procovar.session_token}
       HMAC_TIMESTAMP_SKEW_SECONDS: "300"
       CORS_ALLOWED_ORIGINS: https://avisos.procovar.cloud
       # El guardia anti-SSRF se queda ENCENDIDO.
