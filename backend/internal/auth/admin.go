@@ -180,7 +180,7 @@ func (a *AdminAuthenticator) desdeProcovar(r *http.Request) (Admin, bool) {
 	// Quien administra Avisos lo administra entero: los tipos, las plantillas y
 	// los canales son de la plataforma, no de una sucursal.
 	rol := "APP_ADMIN"
-	if ses.IsSystemAdmin || ses.Puede(PermisoAvisosManage) {
+	if ses.TodoVale || ses.Puede(PermisoAvisosManage) {
 		rol = "SUPER_ADMIN"
 	}
 	return Admin{ID: idDeProcovar(ses.UserID), Role: rol}, true

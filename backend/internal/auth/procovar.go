@@ -71,17 +71,18 @@ func (p *ProcovarAuth) CookieName() string { return p.cookieName }
 
 // Sesion es lo que devuelve el hub sobre quien está entrando.
 type Sesion struct {
-	UserID        string
-	Email         string
-	Nombre        string
-	Roles         []string
-	Permisos      []string
-	IsSystemAdmin bool
+	UserID   string
+	Email    string
+	Nombre   string
+	Roles    []string
+	Permisos []string
+	// TodoVale = `wildcard` del hub: administrador de sistema, lo puede todo.
+	TodoVale bool
 }
 
 // Puede indica si la sesión lleva una clave concreta del catálogo.
 func (s Sesion) Puede(clave string) bool {
-	if s.IsSystemAdmin {
+	if s.TodoVale {
 		return true
 	}
 	for _, p := range s.Permisos {
@@ -100,9 +101,15 @@ type verifySessionResp struct {
 		Name  string `json:"name"`
 	} `json:"user"`
 	Rbac struct {
-		Roles         []string `json:"roles"`
-		Permissions   []string `json:"permissions"`
-		IsSystemAdmin bool     `json:"isSystemAdmin"`
+		Roles       []string `json:"roles"`
+		Permissions []string `json:"permissions"`
+		// OJO: el hub lo llama `wildcard`, no `isSystemAdmin`.
+		//
+		// Para un administrador de sistema, resolveRbac devuelve `global: []` y
+		// `wildcard: true` — la lista de permisos viene VACIA a proposito, porque
+		// los tiene todos. Leer el nombre equivocado deja la bandera en false, los
+		// permisos en cero, y al super admin fuera con un 401 sin explicacion.
+		Wildcard bool `json:"wildcard"`
 	} `json:"rbac"`
 }
 
@@ -139,12 +146,12 @@ func (p *ProcovarAuth) VerifySession(ctx context.Context, sessionToken string) (
 		return Sesion{}, fmt.Errorf("sesión no válida")
 	}
 	return Sesion{
-		UserID:        out.User.ID,
-		Email:         out.User.Email,
-		Nombre:        out.User.Name,
-		Roles:         out.Rbac.Roles,
-		Permisos:      out.Rbac.Permissions,
-		IsSystemAdmin: out.Rbac.IsSystemAdmin,
+		UserID:   out.User.ID,
+		Email:    out.User.Email,
+		Nombre:   out.User.Name,
+		Roles:    out.Rbac.Roles,
+		Permisos: out.Rbac.Permissions,
+		TodoVale: out.Rbac.Wildcard,
 	}, nil
 }
 
