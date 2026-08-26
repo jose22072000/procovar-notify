@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { post, setOnUnauthorized, tokens } from "../api/client";
+import { get, post, setOnUnauthorized, tokens } from "../api/client";
 
 export interface Admin {
   id: string;
@@ -15,6 +15,8 @@ interface LoginResponse {
 
 interface AuthState {
   admin: Admin | null;
+  /** true mientras se comprueba si ya hay sesión de Procovar (SSO). */
+  comprobando: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -40,6 +42,40 @@ function loadAdmin(): Admin | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [admin, setAdmin] = useState<Admin | null>(loadAdmin());
+  // Solo se comprueba si NO había sesión guardada: quien ya entró no espera.
+  const [comprobando, setComprobando] = useState(() => loadAdmin() === null);
+
+  // Sesión única de Procovar.
+  //
+  // Sin esto el SSO no sirve de nada de cara al usuario: el backend acepta la
+  // cookie de procovar-auth, pero la SPA mira `localStorage`, no encuentra
+  // nada y manda al formulario de login igualmente. La cookie viaja sola
+  // —`credentials:"include"` en cada petición y el dominio es
+  // `.procovar.cloud`—, así que basta con PREGUNTAR una vez.
+  //
+  // Un 401 aquí es lo normal para quien no ha entrado en Procovar: se traga en
+  // silencio y se enseña el login de siempre.
+  useEffect(() => {
+    if (admin !== null) return;
+    let vivo = true;
+    void (async () => {
+      try {
+        const yo = await get<Admin>("/admin/me");
+        if (!vivo || !yo?.id) return;
+        localStorage.setItem(ADMIN_KEY, JSON.stringify(yo));
+        setAdmin(yo);
+      } catch {
+        /* sin sesión de Procovar: al login normal */
+      } finally {
+        if (vivo) setComprobando(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+    // Solo al montar: si `admin` cambia es porque ya se entró.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Si una petición autenticada acaba en 401 y el refresh no renueva (sesión
   // caducada/inválida), el cliente avisa aquí: limpiamos la sesión para que la
@@ -65,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const withEmail: Admin = { ...res.admin, email };
     localStorage.setItem(ADMIN_KEY, JSON.stringify(withEmail));
     setAdmin(withEmail);
+    setComprobando(false);
   }
 
   function logout() {
@@ -78,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdmin(null);
   }
 
-  return <AuthContext.Provider value={{ admin, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ admin, comprobando, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {
