@@ -5,3 +5,4 @@ bin/
 !.env.example
 dist/
 *.log
+graphify-out/
